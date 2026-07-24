@@ -3,7 +3,6 @@ pipeline {
     agent any
 
     options {
-        // Fixes the double-checkout issue by disabling the a   utomatic initial checkout
         skipDefaultCheckout()
         timestamps()
     }
@@ -29,31 +28,28 @@ pipeline {
             }
         }
 
-        stage('Compile') {
+        stage('Build, Test & JaCoCo') {
             steps {
                 dir('app/springboot-app') {
-                    sh 'mvn clean compile'
+                    sh '''
+                        mvn clean verify
+                    '''
                 }
             }
         }
 
-        stage('Unit Test & JaCoCo') {
-            steps {
-                dir('app/springboot-app') {
-                    sh 'mvn test'
-                }
-            }
-        }
         stage('Publish Test Results') {
             steps {
                 junit 'app/springboot-app/target/surefire-reports/*.xml'
             }
         }
+
         stage('Archive JaCoCo Report') {
             steps {
                 archiveArtifacts artifacts: 'app/springboot-app/target/site/jacoco/**', fingerprint: true
             }
         }
+
         stage('Publish JaCoCo HTML Report') {
             steps {
                 publishHTML([
@@ -72,9 +68,9 @@ pipeline {
                 dir('app/springboot-app') {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=production-devops-pipeline \
-                        -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                            mvn sonar:sonar \
+                            -Dsonar.projectKey=production-devops-pipeline \
+                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
                         '''
                     }
                 }
@@ -84,8 +80,8 @@ pipeline {
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
-                chmod +x scripts/trivy-fs-scan.sh
-                ./scripts/trivy-fs-scan.sh
+                    chmod +x scripts/trivy-fs-scan.sh
+                    ./scripts/trivy-fs-scan.sh
                 '''
             }
         }
@@ -99,7 +95,9 @@ pipeline {
         stage('Package') {
             steps {
                 dir('app/springboot-app') {
-                    sh 'mvn package -DskipTests'
+                    sh '''
+                        mvn package -DskipTests
+                    '''
                 }
             }
         }
@@ -107,17 +105,18 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                chmod +x scripts/docker-build.sh
-                ./scripts/docker-build.sh
+                    chmod +x scripts/docker-build.sh
+                    ./scripts/docker-build.sh
                 '''
             }
         }
+
         stage('Verify Docker Image') {
             steps {
                 sh '''
-                docker image inspect ${IMAGE_NAME}:${BUILD_NUMBER} > /dev/null
-                echo "Docker image verified successfully."
-                docker images | grep ${IMAGE_NAME}
+                    docker image inspect ${IMAGE_NAME}:${BUILD_NUMBER} >/dev/null
+                    echo "Docker image verified successfully."
+                    docker images | grep ${IMAGE_NAME}
                 '''
             }
         }
@@ -142,36 +141,23 @@ pipeline {
             }
         }
 
-        
-
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    set -e
-
-                    echo "========== Kubernetes Context =========="
-                    kubectl config current-context
-
-                    echo "========== Cluster =========="
-                    kubectl cluster-info
-
-                    echo "========== Nodes =========="
-                    kubectl get nodes
-
-                    echo "========== Applying Manifests =========="
                     kubectl apply -f kubernetes/
                 '''
             }
         }
+
+
         stage('Verify Rollout') {
             steps {
                 sh '''
-                    echo "Waiting for deployment rollout..."
-
-                    kubectl rollout status deployment/springboot-app --timeout=180s
+                    kubectl rollout status deployment/springboot-app --timeout=300s
                 '''
             }
         }
+
         stage('Verify Kubernetes Resources') {
             steps {
                 sh '''
@@ -188,19 +174,17 @@ pipeline {
                 '''
             }
         }
+
         stage('Application Health Check') {
             steps {
                 sh '''
-                    echo "Checking application health..."
-
                     sleep 10
-
                     curl --fail http://localhost:30082/actuator/health
                 '''
             }
         }
     }
-    
+
     post {
         success {
             echo '======================================='
@@ -212,12 +196,11 @@ pipeline {
         failure {
             echo '======================================='
             echo 'Pipeline Failed'
-            echo 'Check Jenkins Console Logs'
             echo '======================================='
         }
 
         always {
-            cleanWs()   
+            cleanWs()
         }
     }
 }
