@@ -114,11 +114,356 @@ The pipeline integrates industry-standard DevOps tools to ensure every change is
 The following diagram illustrates the end-to-end CI/CD workflow implemented in this project.
 
 <p align="center">
-    <img src="docs/architecture.png" alt="Architecture Diagram" width="100%">
+    <img src="docs/screenshots/architecture.png" alt="Architecture Diagram" width="100%">
 </p>
 
 ---
 
+# CI/CD Pipeline Workflow
+
+The Jenkins pipeline automates the complete software delivery lifecycle, from source code checkout to Kubernetes deployment. Every stage has a specific responsibility to ensure the application is built, tested, secured, containerized, and deployed consistently.
+
+The workflow follows two major phases:
+
+- **Continuous Integration (CI)** – Build, test, validate code quality, and create a deployable artifact.
+- **Continuous Delivery (CD)** – Package the application as a Docker image, publish it to Docker Hub, deploy it to Kubernetes, and verify a successful rollout.
+
+---
+
+## Continuous Integration (CI)
+
+The Continuous Integration phase validates every code change before deployment. It ensures that the application compiles successfully, passes all automated tests, meets quality standards, and is free from known security vulnerabilities.
+
+### Stage 1 – Checkout Source Code
+
+**Purpose**
+
+Retrieve the latest source code from the GitHub repository.
+
+**Why it is required**
+
+Every pipeline execution must work on the latest version of the application to ensure builds are reproducible.
+
+**Outcome**
+
+- Downloads the latest code
+- Initializes the Jenkins workspace
+
+---
+
+### Stage 2 – Maven Verify
+
+**Purpose**
+
+Compile the application and execute the Maven verification lifecycle.
+
+**Why it is required**
+
+This stage ensures the application builds successfully and all project dependencies are resolved.
+
+**Outcome**
+
+- Source code compilation
+- Dependency validation
+- Maven lifecycle verification
+
+---
+
+### Stage 3 – JUnit Test Execution
+
+**Purpose**
+
+Execute automated unit tests.
+
+**Why it is required**
+
+Automated testing detects regressions early and validates business logic before deployment.
+
+**Outcome**
+
+- Executes JUnit 5 test cases
+- Generates test reports
+- Prevents deployment if tests fail
+
+---
+
+### Stage 4 – JaCoCo Code Coverage
+
+**Purpose**
+
+Measure automated test coverage.
+
+**Why it is required**
+
+Code coverage helps evaluate how much of the application is validated through automated testing.
+
+**Outcome**
+
+- Generates HTML coverage report
+- Highlights untested code
+- Supports quality improvement
+
+---
+
+### Stage 5 – SonarQube Code Analysis
+
+**Purpose**
+
+Perform static code analysis.
+
+**Why it is required**
+
+Detects bugs, vulnerabilities, security hotspots, and code smells before deployment.
+
+**Outcome**
+
+- Code quality analysis
+- Maintainability metrics
+- Security analysis
+- Technical debt reporting
+
+---
+
+### Stage 6 – Trivy Filesystem Scan
+
+**Purpose**
+
+Scan the project filesystem for vulnerabilities and security issues.
+
+**Why it is required**
+
+Security scanning before containerization reduces the risk of packaging vulnerable dependencies.
+
+**Outcome**
+
+- Dependency vulnerability scanning
+- Secret detection
+- Misconfiguration detection
+
+---
+
+## Continuous Delivery (CD)
+
+After the application successfully completes all validation and security checks, the pipeline proceeds with packaging and deployment.
+
+### Stage 7 – Docker Image Build
+
+**Purpose**
+
+Build a production-ready Docker image.
+
+**Why it is required**
+
+Containers ensure consistent application behavior across development, testing, and production environments.
+
+**Outcome**
+
+- Creates Docker image
+- Packages the Spring Boot application
+- Produces a deployable container
+
+---
+
+### Stage 8 – Docker Push
+
+**Purpose**
+
+Push the Docker image to Docker Hub.
+
+**Why it is required**
+
+Docker Hub acts as the centralized image registry from which Kubernetes pulls application images.
+
+**Outcome**
+
+- Authenticates with Docker Hub
+- Pushes the latest application image
+- Makes the image available for deployment
+
+---
+
+### Stage 9 – Kubernetes Deployment
+
+**Purpose**
+
+Deploy the latest application version to the Kubernetes cluster.
+
+**Why it is required**
+
+Kubernetes manages application lifecycle, scaling, and availability.
+
+**Outcome**
+
+- Applies Kubernetes manifests
+- Updates Deployment
+- Creates or updates Pods
+- Maintains desired state
+
+---
+
+### Stage 10 – Rollout Verification
+
+**Purpose**
+
+Verify that Kubernetes successfully completed the deployment.
+
+**Why it is required**
+
+Ensures the application starts correctly before marking the deployment successful.
+
+**Outcome**
+
+- Waits for rollout completion
+- Detects deployment failures
+- Validates Pod readiness
+
+---
+
+### Stage 11 – Health Check
+
+**Purpose**
+
+Verify application availability after deployment.
+
+**Why it is required**
+
+A successful deployment should also produce a healthy, responsive application.
+
+**Outcome**
+
+- Executes Spring Boot Actuator health endpoint
+- Confirms application readiness
+- Marks the pipeline successful
+
+---
+
+## Continuous Delivery (CD)
+
+After the application successfully completes all validation and security checks, the pipeline proceeds with packaging and deployment.
+
+### Stage 7 – Docker Image Build
+
+**Purpose**
+
+Build a production-ready Docker image.
+
+**Why it is required**
+
+Containers ensure consistent application behavior across development, testing, and production environments.
+
+**Outcome**
+
+- Creates Docker image
+- Packages the Spring Boot application
+- Produces a deployable container
+
+---
+
+### Stage 8 – Docker Push
+
+**Purpose**
+
+Push the Docker image to Docker Hub.
+
+**Why it is required**
+
+Docker Hub acts as the centralized image registry from which Kubernetes pulls application images.
+
+**Outcome**
+
+- Authenticates with Docker Hub
+- Pushes the latest application image
+- Makes the image available for deployment
+
+---
+
+### Stage 9 – Kubernetes Deployment
+
+**Purpose**
+
+Deploy the latest application version to the Kubernetes cluster.
+
+**Why it is required**
+
+Kubernetes manages application lifecycle, scaling, and availability.
+
+**Outcome**
+
+- Applies Kubernetes manifests
+- Updates Deployment
+- Creates or updates Pods
+- Maintains desired state
+
+---
+
+### Stage 10 – Rollout Verification
+
+**Purpose**
+
+Verify that Kubernetes successfully completed the deployment.
+
+**Why it is required**
+
+Ensures the application starts correctly before marking the deployment successful.
+
+**Outcome**
+
+- Waits for rollout completion
+- Detects deployment failures
+- Validates Pod readiness
+
+---
+
+### Stage 11 – Health Check
+
+**Purpose**
+
+Verify application availability after deployment.
+
+**Why it is required**
+
+A successful deployment should also produce a healthy, responsive application.
+
+**Outcome**
+
+- Executes Spring Boot Actuator health endpoint
+- Confirms application readiness
+- Marks the pipeline successful
+
+---
+
+## Pipeline Summary
+
+The complete CI/CD pipeline performs the following automated workflow:
+
+```text
+Developer
+     │
+     ▼
+GitHub Repository
+     │
+     ▼
+Jenkins Pipeline
+     │
+     ├── Checkout
+     ├── Maven Verify
+     ├── JUnit Tests
+     ├── JaCoCo
+     ├── SonarQube
+     ├── Trivy Filesystem Scan
+     ├── Docker Build
+     ├── Docker Push
+     ├── Kubernetes Deployment
+     ├── Rollout Verification
+     └── Health Check
+     │
+     ▼
+Production-Ready Kubernetes Deployment
+```
+
+This automated workflow ensures that every code change is validated, securely packaged, and consistently deployed with minimal manual intervention.
+
+---
 
 # 🛠️ Technology Stack
 
@@ -140,6 +485,8 @@ The following diagram illustrates the end-to-end CI/CD workflow implemented in t
 | Version Control | Git & GitHub |
 
 ---
+
+
 
 # 📂 Project Structure
 
