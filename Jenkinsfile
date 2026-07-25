@@ -109,7 +109,7 @@ pipeline {
 
                         def app = docker.build(
                             "dnraju7747/production-devops-pipeline:latest",
-                            "app/springboot-app"
+                            "-f docker/Dockerfile ."
                         )
 
                     app.push('latest')
