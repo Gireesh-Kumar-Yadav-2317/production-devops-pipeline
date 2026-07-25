@@ -27,7 +27,8 @@ spec:
       containers:
         - name: springboot-app
 
-          image: production-devops-pipeline:latest  
+          image: dnraju7747/production-devops-pipeline:latest
+          imagePullPolicy: Always
 
 
           ports:
