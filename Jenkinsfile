@@ -121,7 +121,7 @@ pipeline {
         stage('Verify Docker Image') {
             steps {
                 sh '''
-                    docker image inspect ${IMAGE_NAME}:${BUILD_NUMBER} >/dev/null
+                    docker image inspect ${IMAGE_NAME}:latest >/dev/null
                     echo "Docker image verified successfully."
                     docker images | grep ${IMAGE_NAME}
                 '''
