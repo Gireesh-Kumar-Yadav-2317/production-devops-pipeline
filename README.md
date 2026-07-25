@@ -465,63 +465,200 @@ This automated workflow ensures that every code change is validated, securely pa
 
 ---
 
-# 🛠️ Technology Stack
+# Deployment Guide
 
-| Category | Technologies |
-|-----------|-------------|
-| Language | Java 17 |
-| Framework | Spring Boot 3 |
-| Build Tool | Maven |
-| Database | MySQL 8 |
-| ORM | Spring Data JPA |
-| Testing | JUnit 5, Mockito |
-| API Documentation | Swagger / OpenAPI |
-| Containerization | Docker |
-| Container Orchestration | Docker Compose |
-| CI/CD | Jenkins |
-| Code Quality | SonarQube |
-| Security | Trivy |
-| Monitoring | Spring Boot Actuator |
-| Version Control | Git & GitHub |
+This section explains how to deploy the application in different environments.
 
 ---
 
+## Prerequisites
 
+Before running the project, install the following software.
 
-# 📂 Project Structure
+| Tool | Version |
+|------|----------|
+| Java | 17+ |
+| Maven | 3.9+ |
+| Docker | Latest |
+| Docker Compose | v2+ |
+| Kubernetes | v1.30+ |
+| kubectl | Latest |
+| Jenkins | LTS |
+| Git | Latest |
 
-```text
-production-devops-pipeline/
-│
-├── app/
-│   └── springboot-app/
-│       ├── src/
-│       ├── target/
-│       └── pom.xml
-│
-├── docker/
-│   └── Dockerfile
-│
-├── docker-compose/
-│   ├── docker-compose.yml
-│   └── .env
-│
-├── scripts/
-│   ├── docker-build.sh
-│   ├── docker-compose-deploy.sh
-│   ├── docker-cleanup.sh
-│   ├── health-check.sh
-│   ├── trivy-fs-scan.sh
-│   └── trivy-image-scan.sh
-│
-├── reports/
-├── docs/screenshots/
-├── Jenkinsfile
-├── README.md
-└── .gitignore
+---
+
+## Clone Repository
+
+```bash
+git clone https://github.com/Nagaraju-209/production-devops-pipeline.git
+
+cd production-devops-pipeline
 ```
 
 ---
+
+## Build the Application
+
+Navigate to the Spring Boot project.
+
+```bash
+cd app/springboot-app
+```
+
+Compile and verify the project.
+
+```bash
+mvn clean verify
+```
+
+Generate the application package.
+
+```bash
+mvn package
+```
+
+---
+
+## Docker Deployment
+
+Build the Docker image.
+
+```bash
+docker build \
+-t production-devops-pipeline:latest \
+-f docker/Dockerfile .
+```
+
+Run the container.
+
+```bash
+docker run -d \
+-p 8082:8082 \
+--name production-devops-pipeline \
+production-devops-pipeline:latest
+```
+
+Verify.
+
+```bash
+docker ps
+```
+
+Application:
+
+```
+http://localhost:8082
+```
+
+---
+
+## Docker Compose Deployment
+
+Deploy the complete application stack.
+
+```bash
+docker compose \
+-f docker-compose/docker-compose.yml up -d
+```
+
+Verify containers.
+
+```bash
+docker compose ps
+```
+
+Stop the environment.
+
+```bash
+docker compose down
+```
+
+---
+
+## Kubernetes Deployment
+
+Deploy all Kubernetes resources.
+
+```bash
+kubectl apply -f kubernetes/
+```
+
+Verify resources.
+
+```bash
+kubectl get all
+```
+
+Check Pods.
+
+```bash
+kubectl get pods
+```
+
+Check Services.
+
+```bash
+kubectl get svc
+```
+
+---
+
+## Verify Deployment
+
+Check rollout status.
+
+```bash
+kubectl rollout status deployment/springboot-app
+```
+
+Check application health.
+
+```bash
+kubectl port-forward svc/springboot-service 8082:8082
+```
+
+Open
+
+```
+http://localhost:8082/actuator/health
+```
+
+Expected response
+
+```json
+{
+  "status":"UP"
+}
+```
+
+---
+
+## Cleanup
+
+Delete Kubernetes resources.
+
+```bash
+kubectl delete -f kubernetes/
+```
+
+Stop Docker Compose.
+
+```bash
+docker compose down
+```
+
+Remove Docker container.
+
+```bash
+docker rm -f production-devops-pipeline
+```
+
+---
+
+
+
+
 
 # 🚀 REST API Endpoints
 
