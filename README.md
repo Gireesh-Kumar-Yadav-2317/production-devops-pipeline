@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/banner.png" alt="Production DevOps Pipeline Banner" width="100%">
+  <img src="docs/banner.png" alt="Production DevOps Pipeline Banner" width="100%">
 </p>
 
 <h1 align="center">Production DevOps Pipeline</h1>
@@ -114,7 +114,7 @@ The pipeline integrates industry-standard DevOps tools to ensure every change is
 The following diagram illustrates the end-to-end CI/CD workflow implemented in this project.
 
 <p align="center">
-    <img src="docs/screenshots/architecture.png" alt="Architecture Diagram" width="100%">
+    <img src="docs/architecture.png" alt="Architecture Diagram" width="100%">
 </p>
 
 ---
@@ -656,14 +656,80 @@ docker rm -f production-devops-pipeline
 
 ---
 
+# Project Screenshots
 
+The following screenshots demonstrate the complete CI/CD pipeline and deployment workflow.
 
+## GitHub Repository
 
+<p align="center">
+    <img src="docs/screenshots/github-home.png" width="100%">
+</p>
 
-# 🚀 REST API Endpoints
+---
+
+## Jenkins Pipeline
+
+<p align="center">
+    <img src="docs/screenshots/jenkins-pipeline-success.png" width="100%">
+</p>
+
+---
+
+## SonarQube Analysis
+
+<p align="center">
+    <img src="docs/screenshots/sonarqube-dashboard.png" width="100%">
+</p>
+
+---
+
+## Docker Hub Repository
+
+<p align="center">
+    <img src="docs/screenshots/dockerhub-repository.png" width="100%">
+</p>
+
+---
+
+## Kubernetes Deployment
+
+<p align="center">
+    <img src="docs/screenshots/kubernetes-pods.png" width="100%">
+</p>
+
+---
+
+## Swagger API Documentation
+
+<p align="center">
+    <img src="docs/screenshots/swagger-ui.png" width="100%">
+</p>
+
+---
+
+## Spring Boot Actuator
+
+<p align="center">
+    <img src="docs/screenshots/actuator-health.png" width="100%">
+</p>
+
+---
+
+# API Documentation
+
+The application exposes REST APIs for Employee Management.
+
+Swagger UI is available at:
+
+```
+http://localhost:8082/swagger-ui/index.html
+```
+
+Example endpoints:
 
 | Method | Endpoint | Description |
-|----------|----------|-------------|
+|---------|----------|-------------|
 | GET | `/api/employees` | Get all employees |
 | GET | `/api/employees/{id}` | Get employee by ID |
 | POST | `/api/employees` | Create employee |
@@ -672,313 +738,54 @@ docker rm -f production-devops-pipeline
 
 ---
 
-# ❤️ Health Endpoint
+# Security & Code Quality
 
-```
-GET /actuator/health
-```
+This project follows secure software delivery practices.
 
-Response
+## Code Quality
 
-```json
-{
-  "status": "UP"
-}
-```
+- Static code analysis using SonarQube
+- Detection of bugs and code smells
+- Maintainability analysis
 
----
-
-# 📊 CI/CD Pipeline
-
-The Jenkins pipeline performs the following stages automatically:
-
-- Checkout Source Code
-- Maven Compile
-- Unit Testing
-- Publish Test Reports
-- JaCoCo Code Coverage
-- SonarQube Analysis
-- Trivy Filesystem Scan
-- Package Application
-- Docker Image Build
-- Docker Image Verification
-- Trivy Image Scan
-- Docker Compose Deployment
-- Health Check Verification
-
----
-
-# 🐳 Docker
-
-Build image
-
-```bash
-docker build -t production-devops-pipeline:latest -f docker/Dockerfile .
-```
-
-Run container
-
-```bash
-docker run -d \
--p 8082:8082 \
-production-devops-pipeline:latest
-```
-
----
-
-# 🐳 Docker Compose
-
-Start the application
-
-```bash
-docker compose --env-file docker-compose/.env \
--f docker-compose/docker-compose.yml up -d
-```
-
-Stop services
-
-```bash
-docker compose --env-file docker-compose/.env \
--f docker-compose/docker-compose.yml down
-```
-
-View running services
-
-```bash
-docker compose --env-file docker-compose/.env \
--f docker-compose/docker-compose.yml ps
-```
-
----
-
-# 🧪 Running Tests
-
-```bash
-cd app/springboot-app
-
-mvn test
-```
-
----
-
-# 📈 JaCoCo Coverage
-
-Generate report
-
-```bash
-mvn test
-```
-
-Coverage Report Location
-
-```
-target/site/jacoco/index.html
-```
-
----
-
-# 🔍 SonarQube Analysis
-
-Run SonarQube analysis
-
-```bash
-mvn sonar:sonar
-```
-
-The Jenkins pipeline automatically performs SonarQube analysis and publishes quality metrics.
-
----
-
-# 🔒 Security Scanning
+## Security Scanning
 
 Filesystem Scan
 
-```bash
-./scripts/trivy-fs-scan.sh
-```
+- Trivy Filesystem Scan
 
-Docker Image Scan
+Container Image Scan
 
-```bash
-./scripts/trivy-image-scan.sh
-```
+- Trivy Docker Image Scan
 
----
-
-# 📷 Project Screenshots
-
-## GitHub Repository
-
-![GitHub Repository](docs/screenshots/01-github-repository.png)
-
----
-
-## Project Structure
-
-![Project Structure](docs/screenshots/02-project-structure.png)
-
----
-
-## Swagger UI
-
-![Swagger UI](docs/screenshots/03-swagger-ui.png)
-
----
-
-## Get Employees API
-
-![Get Employees](docs/screenshots/04-postman-get-employees.png)
-
----
-
-## Create Employee API
-
-![Create Employee](docs/screenshots/05-postman-create-employees.png)
-
----
-
-## JUnit Test Results
-
-![JUnit Tests](docs/screenshots/06-junit-tests.png)
-
----
-
-## JaCoCo Code Coverage
-
-![JaCoCo Report](docs/screenshots/07-jacoco-report.png)
-
----
-
-## SonarQube Dashboard
-
-![SonarQube Dashboard](docs/screenshots/08-sonarqube-dashboard.png)
-
----
-
-## SonarQube Project Overview
-
-![SonarQube Overview](docs/screenshots/09-sonarqube-overview.png)
-
----
-
-## Trivy Filesystem Scan
-
-![Trivy Filesystem Scan](docs/screenshots/10-trivy-filesystem-scan.png)
-
----
-
-## Docker Images
-
-![Docker Images](docs/screenshots/11-docker-images.png)
-
----
-
-## Running Docker Containers
-
-![Docker Containers](docs/screenshots/12-docker-containers.png)
-
----
-
-## Jenkins CI/CD Pipeline
-
-![Jenkins Pipeline](docs/screenshots/13-jenkins-pipeline-success.png)
-
----
-
-## Health Check Verification
-
-![Health Check](docs/screenshots/14-health-check-success.png)
-
----
-
-## Spring Boot Actuator
-
-![Actuator Health](docs/screenshots/15-actuator-health.png)
-
----
-
-## Docker Compose Services
-
-![Docker Compose](docs/screenshots/16-docker-compose-ps.png)
-
----
-
-# ▶️ Local Setup
-
-Clone repository
-
-```bash
-git clone https://github.com/Nagaraju-209/production-devops-pipeline.git
-
-cd production-devops-pipeline
-```
-
-Build application
-
-```bash
-cd app/springboot-app
-
-mvn clean package
-```
-
-Start using Docker Compose
-
-```bash
-docker compose \
---env-file docker-compose/.env \
--f docker-compose/docker-compose.yml up -d
-```
-
-Application
+Reports are available under:
 
 ```
-http://localhost:8082
-```
-
-Swagger UI
-
-```
-http://localhost:8082/swagger-ui/index.html
-```
-
-Health Endpoint
-
-```
-http://localhost:8082/actuator/health
+reports/
 ```
 
 ---
 
-# 📌 Future Enhancements
+# Future Enhancements
 
-- Kubernetes Deployment
-- Helm Charts
-- Prometheus Monitoring
-- Grafana Dashboards
-- Terraform Infrastructure
-- GitHub Actions Pipeline
-- AWS Deployment
-- NGINX Reverse Proxy
+- Implement GitHub Actions alongside Jenkins
+- Add Helm charts for Kubernetes deployment
+- Integrate Prometheus & Grafana monitoring
+- Deploy to AWS EKS
+- Add Ingress Controller
+- Implement ArgoCD GitOps deployment
+- Add Terraform infrastructure provisioning
+- Configure Horizontal Pod Autoscaler (HPA)
 
 ---
 
-# 👨‍💻 Author
+# Author
 
 **Dandu Rama Siva Naga Raju**
 
 - GitHub: https://github.com/Nagaraju-209
 - LinkedIn: https://www.linkedin.com/in/dandu-rama-siva-naga-raju/
 
----
-
-# ⭐ Support
-
 If you found this project useful, consider giving it a ⭐ on GitHub.
 
-It helps others discover the project and motivates continued improvements.
-
 ---
-
-# 📄 License
-
-This project is licensed under the MIT License.
