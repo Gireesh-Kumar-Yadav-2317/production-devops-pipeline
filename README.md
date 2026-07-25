@@ -47,68 +47,78 @@ The pipeline integrates industry-standard DevOps tools to ensure every change is
 
 ---
 
-# 🏗️ Project Architecture
+# Features
 
-```text
-                    Developer
-                        │
-                        ▼
-                GitHub Repository
-                        │
-                        ▼
-                  Jenkins Pipeline
-                        │
-        ┌───────────────┼────────────────┐
-        │               │                │
-        ▼               ▼                ▼
-    Maven Build     Unit Tests      JaCoCo Report
-                        │
-                        ▼
-                 SonarQube Analysis
-                        │
-                        ▼
-              Trivy Security Scanning
-                        │
-                        ▼
-                Docker Image Build
-                        │
-                        ▼
-               Docker Compose Deploy
-                        │
-          ┌─────────────┴─────────────┐
-          │                           │
-          ▼                           ▼
- Spring Boot Container         MySQL Container
-          │                           │
-          └──────── Docker Network ───┘
-                      │
-                      ▼
-             Persistent Docker Volume
-```
+## CI/CD Automation
+
+- Automated CI/CD pipeline using Jenkins
+- Source code checkout from GitHub
+- Maven build lifecycle automation
+- Automated unit testing with JUnit 5
+- Code coverage generation using JaCoCo
+- Automatic artifact packaging
+- Docker image build and push to Docker Hub
+- Automated Kubernetes deployment
+- Deployment verification and health checks
 
 ---
 
-# ✨ Features
+## Code Quality & Security
 
-- Employee Management REST API
+- SonarQube static code analysis
+- Trivy filesystem vulnerability scanning
+- Trivy Docker image security scanning
+- Secure Docker image creation
+- Spring Boot Actuator health monitoring
+
+---
+
+## Containerization
+
+- Production-ready Dockerfile
+- Multi-container setup using Docker Compose
+- Docker Hub image publishing
+- Container health checks
+
+---
+
+## Kubernetes Deployment
+
+- Deployment with rolling updates
+- Service exposure using NodePort
+- ConfigMaps for application configuration
+- Kubernetes Secrets for sensitive data
+- Persistent Volume Claims (PVC)
+- MySQL deployment inside Kubernetes
+- Readiness and Liveness Probes
+- Resource Requests & Limits
+
+---
+
+## Spring Boot Application
+
+- RESTful Employee Management API
 - CRUD Operations
-- Request Validation
-- Global Exception Handling
 - DTO Pattern
+- Validation
+- Exception Handling
 - Spring Data JPA
-- MySQL Integration
+- MySQL Database
 - Swagger/OpenAPI Documentation
 - Spring Boot Actuator
-- Health Checks
-- Dockerized Application
-- Docker Compose Multi-Container Deployment
-- Jenkins CI/CD Pipeline
-- SonarQube Code Quality Analysis
-- Trivy Filesystem Scan
-- Trivy Docker Image Scan
-- JaCoCo Code Coverage Reports
 
 ---
+
+# Architecture
+
+The following diagram illustrates the end-to-end CI/CD workflow implemented in this project.
+
+<p align="center">
+    <img src="docs/architecture.png" alt="Architecture Diagram" width="100%">
+</p>
+
+---
+
 
 # 🛠️ Technology Stack
 
