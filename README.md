@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner-4.png" alt="Production DevOps Pipeline Banner" width="100%">
+  <img src="docs/screenshots/banner.png" alt="Production DevOps Pipeline Banner" width="100%">
 </p>
 
 <h1 align="center">Production DevOps Pipeline</h1>
