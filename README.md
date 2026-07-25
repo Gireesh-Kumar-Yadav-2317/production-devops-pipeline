@@ -1,51 +1,49 @@
-# 🚀 Production DevOps Pipeline
+<p align="center">
+  <img src="docs/banner-4.png" alt="Production DevOps Pipeline Banner" width="100%">
+</p>
 
-![Java](https://img.shields.io/badge/Java-17-orange)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-green)
-![Maven](https://img.shields.io/badge/Maven-3.8+-red)
-![Docker](https://img.shields.io/badge/Docker-Containerized-blue)
-![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Orchestration-blue)
-![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-red)
-![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-brightgreen)
-![Trivy](https://img.shields.io/badge/Trivy-Security%20Scanning-blueviolet)
-![License](https://img.shields.io/badge/License-MIT-green)
+<h1 align="center">Production DevOps Pipeline</h1>
 
----
+<p align="center">
+  <strong>A Production-Ready CI/CD Pipeline built using Spring Boot, Jenkins, Docker, Kubernetes, SonarQube, Trivy, and MySQL.</strong>
+</p>
 
-# 📖 Overview
+<p align="center">
 
-Production DevOps Pipeline is a production-ready Employee Management REST API built with **Spring Boot** and integrated with a complete DevOps workflow.
+![Java](https://img.shields.io/badge/Java-17-orange?style=for-the-badge&logo=openjdk)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-green?style=for-the-badge&logo=springboot)
+![Maven](https://img.shields.io/badge/Maven-3.9-red?style=for-the-badge&logo=apachemaven)
+![Jenkins](https://img.shields.io/badge/Jenkins-CI-red?style=for-the-badge&logo=jenkins)
+![Docker](https://img.shields.io/badge/Docker-Container-blue?style=for-the-badge&logo=docker)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Orchestration-blue?style=for-the-badge&logo=kubernetes)
+![MySQL](https://img.shields.io/badge/MySQL-Database-blue?style=for-the-badge&logo=mysql)
+![SonarQube](https://img.shields.io/badge/SonarQube-Code_Quality-4E9BCD?style=for-the-badge&logo=sonarqube)
+![Trivy](https://img.shields.io/badge/Trivy-Security-purple?style=for-the-badge)
 
-The project demonstrates modern software delivery practices including:
-
-- REST API Development
-- Automated Unit Testing
-- Code Coverage Reporting
-- Static Code Analysis
-- Security Scanning
-- Docker Containerization
-- Docker Compose Orchestration
-- Jenkins CI/CD Pipeline
-- Health Monitoring using Spring Boot Actuator
-
-This project serves as a practical demonstration of how enterprise applications are built, tested, secured, containerized, and deployed.  
+</p>
 
 ---
 
-# 🌟 Project Highlights
+# Project Overview
 
-- ✅ Production-ready Spring Boot REST API
-- ✅ Automated CI/CD with Jenkins
-- ✅ Unit Testing with JUnit 5 & Mockito
-- ✅ Code Coverage with JaCoCo
-- ✅ Static Code Analysis using SonarQube
-- ✅ Security Scanning with Trivy
-- ✅ Docker Containerization
-- ✅ Docker Compose Multi-Container Deployment
-- ✅ MySQL Persistent Storage
-- ✅ Spring Boot Actuator Health Monitoring
-- ✅ Production-style Bash Automation Scripts
-- ✅ Recruiter-friendly Project Documentation
+Modern software delivery requires more than writing application code—it demands automation, security, quality assurance, and reliable deployments.
+
+This project demonstrates a **production-style DevOps CI/CD pipeline** for a Spring Boot application. It automates the complete software delivery lifecycle, including code compilation, testing, static code analysis, security scanning, containerization, image publishing, and Kubernetes deployment.
+
+The pipeline integrates industry-standard DevOps tools to ensure every change is validated, securely packaged, and deployed consistently.
+
+## Key Highlights
+
+- Automated CI/CD pipeline using Jenkins
+- Spring Boot REST API with MySQL
+- Maven build, test, and package automation
+- Code quality analysis using SonarQube
+- Filesystem and container image security scanning using Trivy
+- Docker image creation and publishing to Docker Hub
+- Kubernetes deployment with rolling updates
+- Health verification using Spring Boot Actuator
+- Infrastructure organized using Docker Compose and Kubernetes manifests
+- Production-oriented repository structure and automation scripts
 
 ---
 
