@@ -102,12 +102,19 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Docker Build & Push') {
             steps {
-                sh '''
-                    chmod +x scripts/docker-build.sh
-                    ./scripts/docker-build.sh
-                '''
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-creds') {
+
+                        def app = docker.build(
+                            "dnraju7747/production-devops-pipeline:latest",
+                            "app/springboot-app"
+                        )
+
+                    app.push('latest')
+                    }
+                }
             }
         }
 
@@ -176,11 +183,18 @@ pipeline {
             }
         }
 
-        stage('Application Health Check') {
+        stage('Health Check') {
             steps {
                 sh '''
-                    sleep 10
-                    curl --fail http://localhost:30082/actuator/health
+                    kubectl rollout status deployment/springboot-app --timeout=300s
+
+                    kubectl wait \
+                        --for=condition=ready pod \
+                        -l app=springboot-app \
+                        --timeout=300s
+
+                    kubectl exec deployment/springboot-app -- \
+                    curl -f http://localhost:8082/actuator/health
                 '''
             }
         }
