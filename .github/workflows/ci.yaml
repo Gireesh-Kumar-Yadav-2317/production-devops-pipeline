@@ -19,6 +19,7 @@ concurrency:
 
 env:
   JAVA_VERSION: ${{ vars.JAVA_VERSION || '17' }}
+  TRIVY_VERSION: "0.76.1"
 
 jobs:
   test:
@@ -27,7 +28,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -40,21 +41,10 @@ jobs:
           cache: maven
           cache-dependency-path: app/springboot-app/pom.xml
 
-      - name: Verify Java and Maven
-        working-directory: app/springboot-app
-        run: |
-          java -version
-          chmod +x mvnw
-          ./mvnw --version
-
-      - name: Download Dependencies
-        working-directory: app/springboot-app
-        run: |
-          ./mvnw -B -ntp dependency:go-offline
-
       - name: Build and Test
         working-directory: app/springboot-app
         run: |
+          chmod +x mvnw
           ./mvnw -B -ntp clean verify
 
       - name: Upload Test Reports
@@ -81,22 +71,21 @@ jobs:
           retention-days: 14
 
   docker-security:
-    name: Build, Scan and Publish Docker Image
+    name: Build, Scan and Publish
     runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 30
 
     env:
       LOCAL_IMAGE: employee-app:${{ github.sha }}
-      TRIVY_VERSION: "0.76.1"
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Setup Java
+      - name: Setup Java and Maven Cache
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -104,7 +93,8 @@ jobs:
           cache: maven
           cache-dependency-path: app/springboot-app/pom.xml
 
-      - name: Prime Maven Cache
+      # Warm the Maven cache for Trivy's Java dependency analysis.
+      - name: Populate Maven Cache
         working-directory: app/springboot-app
         run: |
           chmod +x mvnw
@@ -113,7 +103,7 @@ jobs:
       - name: Reject Committed Environment File
         run: |
           if git ls-files --error-unmatch .env >/dev/null 2>&1; then
-            echo "::error::.env must not be committed to Git."
+            echo "::error::.env must not be committed."
             exit 1
           fi
 
@@ -128,35 +118,41 @@ jobs:
         run: |
           set -eu
 
-          if [ -z "$DOCKERHUB_USERNAME" ] || \
-             [ -z "$DOCKERHUB_REPOSITORY" ] || \
-             [ -z "$DOCKERHUB_TOKEN" ]; then
-            echo "::error::Configure DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY and DOCKERHUB_TOKEN."
+          test -n "$DOCKERHUB_USERNAME" || {
+            echo "::error::DOCKERHUB_USERNAME is missing."
             exit 1
-          fi
+          }
 
-          echo "Docker Hub configuration is present."
+          test -n "$DOCKERHUB_REPOSITORY" || {
+            echo "::error::DOCKERHUB_REPOSITORY is missing."
+            exit 1
+          }
+
+          test -n "$DOCKERHUB_TOKEN" || {
+            echo "::error::DOCKERHUB_TOKEN is missing."
+            exit 1
+          }
 
       - name: Create Trivy Cache
-        run: |
-          mkdir -p "$HOME/.cache/trivy"
+        run: mkdir -p "$HOME/.cache/trivy"
 
-      - name: Scan Source Code
+      # Skip Java source metadata here to avoid Maven Central lookups.
+      # Keep the built image scan for Java package vulnerabilities.
+      - name: Scan Source for Secrets and Misconfigurations
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
-            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
-            fs \
+            fs /work \
             --scanners secret,misconfig \
+            --skip-dirs /work/app/springboot-app \
             --severity HIGH,CRITICAL \
             --format json \
             --output /work/trivy-fs-results.json \
-            --exit-code 0 \
-            /work
+            --exit-code 0
 
-      - name: Set Up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
@@ -178,10 +174,12 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
+            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
             image \
             --input /work/image.tar \
             --scanners vuln \
+            --offline-scan \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format json \
@@ -199,33 +197,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Diagnose Docker Hub Publishing
+      - name: Diagnose Publishing Conditions
         if: always()
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "Event: $GITHUB_EVENT_NAME"
-          echo "Branch ref: $GITHUB_REF"
-          echo "Job status before publishing: ${{ job.status }}"
+          echo "Ref: $GITHUB_REF"
+          echo "Job status: ${{ job.status }}"
 
           if [ -n "$DOCKERHUB_USERNAME" ]; then
             echo "Docker Hub username: configured"
           else
-            echo "::warning::DOCKERHUB_USERNAME is missing"
+            echo "::warning::Docker Hub username is missing"
           fi
 
           if [ -n "$DOCKERHUB_REPOSITORY" ]; then
             echo "Docker Hub repository: configured"
           else
-            echo "::warning::DOCKERHUB_REPOSITORY is missing"
-          fi
-
-          if [ -n "$DOCKERHUB_TOKEN" ]; then
-            echo "Docker Hub token: configured"
-          else
-            echo "::warning::DOCKERHUB_TOKEN is missing"
+            echo "::warning::Docker Hub repository is missing"
           fi
 
       - name: Docker Hub Login
@@ -238,7 +229,7 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Image To Docker Hub
+      - name: Push Image to Docker Hub
         if: >-
           success() &&
           github.event_name == 'push' &&
@@ -251,13 +242,11 @@ jobs:
 
           IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
 
-          echo "Publishing image: ${IMAGE}"
-          echo "Commit tag: ${GITHUB_SHA}"
-
           docker tag "$LOCAL_IMAGE" "$IMAGE:${GITHUB_SHA}"
           docker push "$IMAGE:${GITHUB_SHA}"
 
           docker tag "$LOCAL_IMAGE" "$IMAGE:latest"
           docker push "$IMAGE:latest"
 
-          echo "Docker image published successfully."
+          echo "Published $IMAGE:${GITHUB_SHA}"
+          echo "Published $IMAGE:latest"
