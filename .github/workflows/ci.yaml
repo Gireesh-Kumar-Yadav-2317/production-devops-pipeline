@@ -39,6 +39,7 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+          cache-dependency-path: app/springboot-app/pom.xml
 
       - name: Verify Java and Maven
         working-directory: app/springboot-app
@@ -82,6 +83,7 @@ jobs:
 
     env:
       LOCAL_IMAGE: ci-image:${{ github.sha }}
+      TRIVY_VERSION: "0.76.1"
 
     steps:
       - name: Checkout source code
@@ -96,12 +98,30 @@ jobs:
             exit 1
           fi
 
-      - name: Scan source and dependencies
-        env:
-          TRIVY_VERSION: "0.76.1"
+      # Each GitHub Actions job has its own runner.
+      # Restore the Maven cache in this job too.
+      - name: Set up Java and restore Maven cache
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          cache-dependency-path: app/springboot-app/pom.xml
+
+      # Populate ~/.m2/repository before Trivy examines pom.xml.
+      - name: Resolve Maven dependencies
+        working-directory: app/springboot-app
         run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp dependency:go-offline
+
+      - name: Scan source and dependencies
+        run: |
+          mkdir -p "$HOME/.cache/trivy"
+
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
+            -v "$HOME/.m2/repository:/root/.m2/repository:ro" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
             aquasec/trivy:${TRIVY_VERSION} \
             fs \
@@ -126,22 +146,23 @@ jobs:
             .
 
       - name: Scan Docker image for vulnerabilities
-        env:
-          TRIVY_VERSION: "0.76.1"
-          LOCAL_IMAGE: ci-image:${{ github.sha }}
         run: |
+          mkdir -p "$HOME/.cache/trivy"
+
+          # Export the image so Trivy does not need the Docker socket.
+          docker save "$LOCAL_IMAGE" -o "$GITHUB_WORKSPACE/image.tar"
+
           docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
             aquasec/trivy:${TRIVY_VERSION} \
             image \
+            --input /work/image.tar \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format json \
             --output /work/trivy-image-results.json \
-            --exit-code 1 \
-            "$LOCAL_IMAGE"
+            --exit-code 1
 
       - name: Upload security scan reports
         if: always()
@@ -170,14 +191,18 @@ jobs:
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
         env:
-          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
         run: |
           set -eu
 
-          if [ -z "$DOCKERHUB_IMAGE" ] || [ "$DOCKERHUB_IMAGE" = "/" ]; then
-            echo "::error::Configure DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY."gi
+          if [ -z "$DOCKERHUB_USERNAME" ] || \
+             [ -z "$DOCKERHUB_REPOSITORY" ]; then
+            echo "::error::Configure DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY."
             exit 1
           fi
+
+          DOCKERHUB_IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
 
           docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:$GITHUB_SHA"
           docker push "$DOCKERHUB_IMAGE:$GITHUB_SHA"
