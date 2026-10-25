@@ -52,10 +52,15 @@ jobs:
             - name: Checkout source code
               uses: actions/checkout@v4
 
+          
             - name: Build Docker image
+              env:
+                IMAGE_NAME: ${{ github.event.repository.name }}
+                IMAGE_TAG: ${{ github.sha }}
               run: |
                 docker build \
-                --pull \
-                --tag production-devops-pipeline:${{ github.sha }} \
-                --file docker/Dockerfile \
-        
+                  --pull \
+                  --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
+                  --file docker/Dockerfile \
+                    .
+
