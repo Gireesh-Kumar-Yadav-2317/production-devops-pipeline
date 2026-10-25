@@ -98,7 +98,7 @@ jobs:
 
       - name: Scan source and dependencies
         env:
-          TRIVY_VERSION: "0.68.2"
+          TRIVY_VERSION: "0.76.1"
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
@@ -127,7 +127,7 @@ jobs:
 
       - name: Scan Docker image for vulnerabilities
         env:
-          TRIVY_VERSION: "0.68.2"
+          TRIVY_VERSION: "0.76.1"
           LOCAL_IMAGE: ci-image:${{ github.sha }}
         run: |
           docker run --rm \
