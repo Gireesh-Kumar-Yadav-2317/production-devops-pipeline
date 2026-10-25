@@ -1,66 +1,175 @@
+
 name: Employee Management CI
 
 on:
-    push:
-        branches:
-            - main
-            - 'feature/*'
-    pull_request:
-        branches:
-            - main
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
-    contents: read
-
-
+  contents: read
 
 concurrency:
-    group: employee-ci-${{github.workflow}}-${{github.ref}}
-    cancel-in-progress: true
+  group: employee-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: ${{ vars.JAVA_VERSION || '17' }}
 
 jobs:
-    test:
-        name: Build and Test Java Application
-        runs-on: ubuntu-latest
-        timeout-minutes: 15 
+  test:
+    name: Build, Test and Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
-        steps:
-            - name: Checkout Source Code
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-            - name: Set up Java
-              uses: actions/setup-java@v5
-              with:
-                distribution: temurin
-                java-version: '17'
-                cache: maven 
-            - name: Make maven wrapper executable
-              working-directory: app/springboot-app
-              run: chmod +x ./mvnw
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
 
-            - name: Run tests and package application
-              working-directory: app/springboot-app
-              run: ./mvnw -B -ntp clean verify
+      - name: Verify Java and Maven
+        working-directory: app/springboot-app
+        run: |
+          java -version
+          chmod +x mvnw
+          ./mvnw --version
 
-    docker-build:
-        name: Validate Docker Image Build
-        runs-on: ubuntu-latest
-        needs: test
-        timeout-minutes: 15
+      - name: Run all configured Maven checks
+        working-directory: app/springboot-app
+        run: ./mvnw -B -ntp clean verify
 
-        steps:
-            - name: Checkout source code
-              uses: actions/checkout@v4
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.sha }}
+          path: |
+            app/springboot-app/target/surefire-reports/
+            app/springboot-app/target/failsafe-reports/
+            app/springboot-app/target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
 
-          
-            - name: Build Docker image
-              env:
-                IMAGE_NAME: ${{ github.event.repository.name }}
-                IMAGE_TAG: ${{ github.sha }}
-              run: |
-                docker build \
-                  --pull \
-                  --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
-                  --file docker/Dockerfile \
-                    .
+      - name: Upload packaged application
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar-${{ github.sha }}
+          path: |
+            app/springboot-app/target/*.jar
+            !app/springboot-app/target/*.original
+          if-no-files-found: error
+          retention-days: 14
 
+  docker-security:
+    name: Build and Scan Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 30
+
+    env:
+      LOCAL_IMAGE: ci-image:${{ github.sha }}
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Reject committed environment file
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env must not be committed to Git."
+            exit 1
+          fi
+
+      - name: Scan source and dependencies
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: json
+          output: trivy-fs-results.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            --pull \
+            --load \
+            --tag "$LOCAL_IMAGE" \
+            --file docker/Dockerfile \
+            .
+
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          scan-type: image
+          image-ref: ci-image:${{ github.sha }}
+          scanners: vuln
+          format: json
+          output: trivy-image-results.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Upload security scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.sha }}
+          path: |
+            trivy-fs-results.json
+            trivy-image-results.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Log in to Docker Hub
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push verified image to Docker Hub
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}
+        run: |
+          set -eu
+
+          if [ -z "$DOCKERHUB_IMAGE" ] || [ "$DOCKERHUB_IMAGE" = "/" ]; then
+            echo "::error::Configure DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY."
+            exit 1
+          fi
+
+          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:$GITHUB_SHA"
+          docker push "$DOCKERHUB_IMAGE:$GITHUB_SHA"
+
+          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:latest"
+          docker push "$DOCKERHUB_IMAGE:latest"
