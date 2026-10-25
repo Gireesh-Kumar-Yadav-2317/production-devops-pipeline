@@ -1,66 +1,84 @@
+
+name: employee-management
+
 services:
-
   mysql-db:
-    image: mysql:8.4
-    container_name: mysql-db
-
+    image: mysql:8.0
     restart: unless-stopped
+    stop_grace_period: 1m
 
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-
-    ports:
-      - "3306:3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-employee_db}
+      MYSQL_USER: ${MYSQL_USER:-employee_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
 
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
 
-    networks:
-      - devops-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test:
+        - CMD-SHELL
+        - 'mysqladmin ping -h 127.0.0.1 -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent'
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
 
-  springboot-app:
+    networks:
+      - db_net
+
+    cpus: 1.0
+    mem_limit: 1g
+
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    image: ${IMAGE_NAME:-production-devops-pipeline}:${APP_VERSION:-1.0}
+    container_name: ${CONTAINER_NAME:-springboot-container}
 
     build:
       context: ..
       dockerfile: docker/Dockerfile
 
-    image: production-devops-pipeline:latest
-
-    container_name: springboot-container
-
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+
+    ports:
+      - "127.0.0.1:${APP_PORT:-8082}:8082"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql-db:3306/employee_db}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-devops}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD in .env}
 
     depends_on:
       mysql-db:
         condition: service_healthy
 
-    ports:
-      - "${APP_PORT}:8082"
-
-    env_file:
-      - .env
-    environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-
     networks:
-      - devops-network
-    
+      - app_net
+      - db_net
+
+    cpus: 1.0
+    mem_limit: 768m
+
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
-
-  devops-network:
+  app_net:
+  db_net:
+    internal: true
 
 volumes:
-
-  mysql-data:
+  mysql_data:
