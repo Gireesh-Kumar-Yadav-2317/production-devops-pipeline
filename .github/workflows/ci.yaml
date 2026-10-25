@@ -1,4 +1,3 @@
-
 name: Employee Management CI
 
 on:
@@ -48,9 +47,15 @@ jobs:
           chmod +x mvnw
           ./mvnw --version
 
+      - name: Download dependencies for offline use
+        working-directory: app/springboot-app
+        run: |
+          ./mvnw -B -ntp dependency:go-offline
+
       - name: Run all configured Maven checks
         working-directory: app/springboot-app
-        run: ./mvnw -B -ntp clean verify
+        run: |
+          ./mvnw -B -ntp clean verify
 
       - name: Upload test and coverage reports
         if: always()
@@ -91,6 +96,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          cache-dependency-path: app/springboot-app/pom.xml
+
+      - name: Restore Maven cache
+        working-directory: app/springboot-app
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp dependency:go-offline
+
       - name: Reject committed environment file
         run: |
           if git ls-files --error-unmatch .env >/dev/null 2>&1; then
@@ -98,13 +117,16 @@ jobs:
             exit 1
           fi
 
-      - name: Scan source for secrets and misconfigurations
+      - name: Create Trivy cache directory
         run: |
           mkdir -p "$HOME/.cache/trivy"
 
+      - name: Scan source for secrets and misconfigurations
+        run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
+            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
             fs \
             --scanners secret,misconfig \
@@ -156,7 +178,7 @@ jobs:
           retention-days: 14
 
       - name: Log in to Docker Hub
-        if: >-
+        if: >
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
@@ -166,7 +188,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push verified image to Docker Hub
-        if: >-
+        if: >
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
