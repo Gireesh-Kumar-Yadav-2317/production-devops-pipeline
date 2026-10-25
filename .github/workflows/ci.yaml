@@ -19,6 +19,7 @@ concurrency:
 
 env:
   JAVA_VERSION: ${{ vars.JAVA_VERSION || '17' }}
+  TRIVY_VERSION: "0.76.1"
 
 jobs:
   test:
@@ -27,7 +28,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout source code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -40,21 +41,10 @@ jobs:
           cache: maven
           cache-dependency-path: app/springboot-app/pom.xml
 
-      - name: Verify Java and Maven
-        working-directory: app/springboot-app
-        run: |
-          java -version
-          chmod +x mvnw
-          ./mvnw --version
-
-      - name: Download Dependencies
-        working-directory: app/springboot-app
-        run: |
-          ./mvnw -B -ntp dependency:go-offline
-
       - name: Build and Test
         working-directory: app/springboot-app
         run: |
+          chmod +x mvnw
           ./mvnw -B -ntp clean verify
 
       - name: Upload Test Reports
@@ -69,7 +59,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload Application Jar
+      - name: Upload Application JAR
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -81,20 +71,21 @@ jobs:
           retention-days: 14
 
   docker-security:
-    name: Build and Scan Docker Image
+    name: Build, Scan and Publish
     runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 30
 
     env:
       LOCAL_IMAGE: employee-app:${{ github.sha }}
-      TRIVY_VERSION: "0.76.1"
 
     steps:
-      - name: Checkout Source
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Setup Java
+      - name: Setup Java and Maven Cache
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -102,7 +93,8 @@ jobs:
           cache: maven
           cache-dependency-path: app/springboot-app/pom.xml
 
-      - name: Prime Maven Cache
+      # Warm the Maven cache for Trivy's Java dependency analysis.
+      - name: Populate Maven Cache
         working-directory: app/springboot-app
         run: |
           chmod +x mvnw
@@ -111,29 +103,56 @@ jobs:
       - name: Reject Committed Environment File
         run: |
           if git ls-files --error-unmatch .env >/dev/null 2>&1; then
-            echo "::error::.env file must not be committed"
+            echo "::error::.env must not be committed."
             exit 1
           fi
+
+      - name: Validate Docker Hub Configuration
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -eu
+
+          test -n "$DOCKERHUB_USERNAME" || {
+            echo "::error::DOCKERHUB_USERNAME is missing."
+            exit 1
+          }
+
+          test -n "$DOCKERHUB_REPOSITORY" || {
+            echo "::error::DOCKERHUB_REPOSITORY is missing."
+            exit 1
+          }
+
+          test -n "$DOCKERHUB_TOKEN" || {
+            echo "::error::DOCKERHUB_TOKEN is missing."
+            exit 1
+          }
 
       - name: Create Trivy Cache
         run: mkdir -p "$HOME/.cache/trivy"
 
-      # Debug mode: shows findings in logs
-      - name: Scan Source Code
+      # Skip Java source metadata here to avoid Maven Central lookups.
+      # Keep the built image scan for Java package vulnerabilities.
+      - name: Scan Source for Secrets and Misconfigurations
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
-            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
-            fs \
+            fs /work \
             --scanners secret,misconfig \
+            --skip-dirs /work/app/springboot-app \
             --severity HIGH,CRITICAL \
-            --format table \
-            --exit-code 0 \
-            /work
+            --format json \
+            --output /work/trivy-fs-results.json \
+            --exit-code 0
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
@@ -141,6 +160,8 @@ jobs:
           docker buildx build \
             --pull \
             --load \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
             --tag "$LOCAL_IMAGE" \
             --file docker/Dockerfile \
             .
@@ -153,29 +174,17 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
+            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
             image \
             --input /work/image.tar \
             --scanners vuln \
+            --offline-scan \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
-            --format table \
-            --exit-code 0
-
-      - name: Generate Security Reports
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/work" \
-            -v "$HOME/.cache/trivy:/root/.cache/" \
-            -v "$HOME/.m2:/root/.m2" \
-            aquasec/trivy:${TRIVY_VERSION} \
-            fs \
-            --scanners secret,misconfig \
-            --severity HIGH,CRITICAL \
             --format json \
-            --output /work/trivy-fs-results.json \
-            --exit-code 0 \
-            /work
+            --output /work/trivy-image-results.json \
+            --exit-code 0
 
       - name: Upload Security Reports
         if: always()
@@ -184,11 +193,34 @@ jobs:
           name: security-reports-${{ github.sha }}
           path: |
             trivy-fs-results.json
+            trivy-image-results.json
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Diagnose Publishing Conditions
+        if: always()
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        run: |
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Ref: $GITHUB_REF"
+          echo "Job status: ${{ job.status }}"
+
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            echo "Docker Hub username: configured"
+          else
+            echo "::warning::Docker Hub username is missing"
+          fi
+
+          if [ -n "$DOCKERHUB_REPOSITORY" ]; then
+            echo "Docker Hub repository: configured"
+          else
+            echo "::warning::Docker Hub repository is missing"
+          fi
+
       - name: Docker Hub Login
-        if: >
+        if: >-
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
@@ -197,8 +229,8 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Image To DockerHub
-        if: >
+      - name: Push Image to Docker Hub
+        if: >-
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
@@ -208,12 +240,6 @@ jobs:
         run: |
           set -eu
 
-          if [ -z "$DOCKERHUB_USERNAME" ] || \
-             [ -z "$DOCKERHUB_REPOSITORY" ]; then
-            echo "::error::DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY are required"
-            exit 1
-          fi
-
           IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
 
           docker tag "$LOCAL_IMAGE" "$IMAGE:${GITHUB_SHA}"
@@ -221,3 +247,6 @@ jobs:
 
           docker tag "$LOCAL_IMAGE" "$IMAGE:latest"
           docker push "$IMAGE:latest"
+
+          echo "Published $IMAGE:${GITHUB_SHA}"
+          echo "Published $IMAGE:latest"
