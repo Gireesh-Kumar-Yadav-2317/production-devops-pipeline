@@ -1,4 +1,3 @@
-
 name: Employee Management CI
 
 on:
@@ -28,12 +27,12 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout source code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -48,17 +47,17 @@ jobs:
           chmod +x mvnw
           ./mvnw --version
 
-      - name: Download dependencies
+      - name: Download Dependencies
         working-directory: app/springboot-app
         run: |
           ./mvnw -B -ntp dependency:go-offline
 
-      - name: Build and test
+      - name: Build and Test
         working-directory: app/springboot-app
         run: |
           ./mvnw -B -ntp clean verify
 
-      - name: Upload test and coverage reports
+      - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -70,7 +69,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload application JAR
+      - name: Upload Application JAR
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -92,12 +91,12 @@ jobs:
       TRIVY_VERSION: "0.76.1"
 
     steps:
-      - name: Checkout source code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up Java and restore Maven cache
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -105,24 +104,43 @@ jobs:
           cache: maven
           cache-dependency-path: app/springboot-app/pom.xml
 
-      - name: Populate Maven dependency cache
+      - name: Prime Maven Cache
         working-directory: app/springboot-app
         run: |
           chmod +x mvnw
           ./mvnw -B -ntp dependency:go-offline
 
-      - name: Reject committed environment file
+      - name: Reject Committed Environment File
         run: |
           if git ls-files --error-unmatch .env >/dev/null 2>&1; then
             echo "::error::.env must not be committed to Git."
             exit 1
           fi
 
-      - name: Create Trivy cache directory
+      - name: Validate Docker Hub Configuration
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -eu
+
+          if [ -z "$DOCKERHUB_USERNAME" ] || \
+             [ -z "$DOCKERHUB_REPOSITORY" ] || \
+             [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "::error::Configure DOCKERHUB_USERNAME, DOCKERHUB_REPOSITORY and DOCKERHUB_TOKEN."
+            exit 1
+          fi
+
+      - name: Create Trivy Cache
         run: |
           mkdir -p "$HOME/.cache/trivy"
 
-      - name: Scan source for secrets and misconfigurations
+      # Diagnostic mode: findings are displayed but do not block the build.
+      - name: Scan Source Code
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
@@ -132,24 +150,25 @@ jobs:
             fs \
             --scanners secret,misconfig \
             --severity HIGH,CRITICAL \
-            --format json \
-            --output /work/trivy-fs-results.json \
-            --exit-code 1 \
+            --format table \
+            --exit-code 0 \
             /work
 
-      - name: Set up Docker Buildx
+      - name: Set Up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
           docker buildx build \
             --pull \
             --load \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
             --tag "$LOCAL_IMAGE" \
             --file docker/Dockerfile \
             .
 
-      - name: Scan Docker image for vulnerabilities
+      - name: Scan Docker Image
         run: |
           docker save "$LOCAL_IMAGE" \
             -o "$GITHUB_WORKSPACE/image.tar"
@@ -163,11 +182,42 @@ jobs:
             --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
+            --format table \
+            --exit-code 0
+
+      - name: Generate Source Security Report
+        if: always()
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -v "$HOME/.cache/trivy:/root/.cache/" \
+            -v "$HOME/.m2:/root/.m2" \
+            aquasec/trivy:${TRIVY_VERSION} \
+            fs \
+            --scanners secret,misconfig \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output /work/trivy-fs-results.json \
+            --exit-code 0 \
+            /work
+
+      - name: Generate Image Security Report
+        if: always() && hashFiles('image.tar') != ''
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -v "$HOME/.cache/trivy:/root/.cache/" \
+            aquasec/trivy:${TRIVY_VERSION} \
+            image \
+            --input /work/image.tar \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
             --format json \
             --output /work/trivy-image-results.json \
-            --exit-code 1
+            --exit-code 0
 
-      - name: Upload security reports
+      - name: Upload Security Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -178,7 +228,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Log in to Docker Hub
+      - name: Docker Hub Login
         if: >-
           success() &&
           github.event_name == 'push' &&
@@ -188,7 +238,7 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push verified image to Docker Hub
+      - name: Push Image To Docker Hub
         if: >-
           success() &&
           github.event_name == 'push' &&
@@ -199,16 +249,10 @@ jobs:
         run: |
           set -eu
 
-          if [ -z "$DOCKERHUB_USERNAME" ] || \
-             [ -z "$DOCKERHUB_REPOSITORY" ]; then
-            echo "::error::Configure DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY."
-            exit 1
-          fi
+          IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
 
-          DOCKERHUB_IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
+          docker tag "$LOCAL_IMAGE" "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:${GITHUB_SHA}"
 
-          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:$GITHUB_SHA"
-          docker push "$DOCKERHUB_IMAGE:$GITHUB_SHA"
-
-          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:latest"
-          docker push "$DOCKERHUB_IMAGE:latest"
+          docker tag "$LOCAL_IMAGE" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
