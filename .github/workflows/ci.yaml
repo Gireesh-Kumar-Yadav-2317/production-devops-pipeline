@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
-      - 'feature/**'
+      - "feature/**"
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -19,6 +21,8 @@ concurrency:
 
 env:
   JAVA_VERSION: ${{ vars.JAVA_VERSION || '17' }}
+  APP_DIR: app/springboot-app
+  TRIVY_VERSION: ${{ vars.TRIVY_VERSION || '0.76.1' }}
 
 jobs:
   test:
@@ -27,56 +31,56 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout source code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
-          cache-dependency-path: app/springboot-app/pom.xml
+          cache-dependency-path: ${{ env.APP_DIR }}/pom.xml
 
       - name: Verify Java and Maven
-        working-directory: app/springboot-app
+        working-directory: ${{ env.APP_DIR }}
         run: |
           java -version
           chmod +x mvnw
           ./mvnw --version
 
-      - name: Download dependencies
-        working-directory: app/springboot-app
+      - name: Download Dependencies
+        working-directory: ${{ env.APP_DIR }}
         run: |
           ./mvnw -B -ntp dependency:go-offline
 
-      - name: Build and test
-        working-directory: app/springboot-app
+      - name: Build Test Package
+        working-directory: ${{ env.APP_DIR }}
         run: |
           ./mvnw -B -ntp clean verify
 
-      - name: Upload test and coverage reports
+      - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-${{ github.sha }}
           path: |
-            app/springboot-app/target/surefire-reports/
-            app/springboot-app/target/failsafe-reports/
-            app/springboot-app/target/site/jacoco/
+            ${{ env.APP_DIR }}/target/surefire-reports/
+            ${{ env.APP_DIR }}/target/failsafe-reports/
+            ${{ env.APP_DIR }}/target/site/jacoco/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload application JAR
+      - name: Upload Application JAR
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: application-jar-${{ github.sha }}
           path: |
-            app/springboot-app/target/*.jar
-            !app/springboot-app/target/*.original
+            ${{ env.APP_DIR }}/target/*.jar
+            !${{ env.APP_DIR }}/target/*.original
           if-no-files-found: error
           retention-days: 14
 
@@ -88,30 +92,29 @@ jobs:
 
     env:
       LOCAL_IMAGE: employee-app:${{ github.sha }}
-      TRIVY_VERSION: "0.76.1"
 
     steps:
-      - name: Checkout source code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Reject committed environment file
+      - name: Reject Committed Environment File
         run: |
           if git ls-files --error-unmatch .env >/dev/null 2>&1; then
-            echo "::error::.env must not be committed to Git."
+            echo "::error::.env file must not be committed"
             exit 1
           fi
 
-      - name: Create Trivy cache directory
-        run: |
-          mkdir -p "$HOME/.cache/trivy"
+      - name: Create Trivy Cache
+        run: mkdir -p "$HOME/.cache/trivy"
 
-      - name: Scan source for secrets and misconfigurations
+      - name: Filesystem Security Scan
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
+            -v "$HOME/.m2:/root/.m2" \
             aquasec/trivy:${TRIVY_VERSION} \
             fs \
             --scanners secret,misconfig \
@@ -121,10 +124,10 @@ jobs:
             --exit-code 1 \
             /work
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
           docker buildx build \
             --pull \
@@ -133,10 +136,10 @@ jobs:
             --file docker/Dockerfile \
             .
 
-      - name: Scan Docker image for vulnerabilities
+      - name: Scan Docker Image
         run: |
           docker save "$LOCAL_IMAGE" \
-            -o "$GITHUB_WORKSPACE/image.tar"
+            -o image.tar
 
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
@@ -151,7 +154,7 @@ jobs:
             --output /work/trivy-image-results.json \
             --exit-code 1
 
-      - name: Upload security reports
+      - name: Upload Security Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -162,8 +165,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Log in to Docker Hub
-        if: >-
+      - name: Login to Docker Hub
+        if: >
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
@@ -172,8 +175,8 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push verified image to Docker Hub
-        if: >-
+      - name: Push Docker Image
+        if: >
           success() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
@@ -185,14 +188,18 @@ jobs:
 
           if [ -z "$DOCKERHUB_USERNAME" ] || \
              [ -z "$DOCKERHUB_REPOSITORY" ]; then
-            echo "::error::Configure DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY."
+            echo "::error::DOCKERHUB_USERNAME and DOCKERHUB_REPOSITORY are required"
             exit 1
           fi
 
-          DOCKERHUB_IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
+          IMAGE="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}"
 
-          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:$GITHUB_SHA"
-          docker push "$DOCKERHUB_IMAGE:$GITHUB_SHA"
+          docker tag "$LOCAL_IMAGE" "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:${GITHUB_SHA}"
 
-          docker tag "$LOCAL_IMAGE" "$DOCKERHUB_IMAGE:latest"
-          docker push "$DOCKERHUB_IMAGE:latest"
+          docker tag "$LOCAL_IMAGE" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+
+          echo "Successfully pushed:"
+          echo "$IMAGE:${GITHUB_SHA}"
+          echo "$IMAGE:latest"
