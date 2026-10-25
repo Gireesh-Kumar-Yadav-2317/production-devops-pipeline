@@ -98,36 +98,17 @@ jobs:
             exit 1
           fi
 
-      # Each GitHub Actions job has its own runner.
-      # Restore the Maven cache in this job too.
-      - name: Set up Java and restore Maven cache
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-          cache-dependency-path: app/springboot-app/pom.xml
-
-      # Populate ~/.m2/repository before Trivy examines pom.xml.
-      - name: Resolve Maven dependencies
-        working-directory: app/springboot-app
-        run: |
-          chmod +x mvnw
-          ./mvnw -B -ntp dependency:go-offline
-
-      - name: Scan source and dependencies
+      - name: Scan source for secrets and misconfigurations
         run: |
           mkdir -p "$HOME/.cache/trivy"
 
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
-            -v "$HOME/.m2/repository:/root/.m2/repository:ro" \
             -v "$HOME/.cache/trivy:/root/.cache/" \
             aquasec/trivy:${TRIVY_VERSION} \
             fs \
-            --scanners vuln,secret,misconfig \
+            --scanners secret,misconfig \
             --severity HIGH,CRITICAL \
-            --ignore-unfixed \
             --format json \
             --output /work/trivy-fs-results.json \
             --exit-code 1 \
@@ -147,10 +128,8 @@ jobs:
 
       - name: Scan Docker image for vulnerabilities
         run: |
-          mkdir -p "$HOME/.cache/trivy"
-
-          # Export the image so Trivy does not need the Docker socket.
-          docker save "$LOCAL_IMAGE" -o "$GITHUB_WORKSPACE/image.tar"
+          docker save "$LOCAL_IMAGE" \
+            -o "$GITHUB_WORKSPACE/image.tar"
 
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" \
@@ -158,6 +137,7 @@ jobs:
             aquasec/trivy:${TRIVY_VERSION} \
             image \
             --input /work/image.tar \
+            --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format json \
